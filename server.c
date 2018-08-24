@@ -52,20 +52,20 @@ void send_switching(FILE *cwrite, char *protocol, char *websocket_hash) {
 }
 
 int read_line(FILE *cread, char *buffer, int length) {
-	if (fgets(buffer, length, cread) == NULL) {
+	if (!fgets(buffer, length, cread)) {
 		return -1;
 	}
 
 	char *pos1 = strchr(buffer, '\r');
 	char *pos2 = strchr(buffer, '\n');
-	if (pos1 == NULL && pos2 == NULL) {
+	if (!pos1 && !pos2) {
 		return -1;
 	}
 
-	if (pos1 != NULL) {
+	if (pos1) {
 		*pos1 = '\0';
 	}
-	if (pos2 != NULL) {
+	if (pos2) {
 		*pos2 = '\0';
 	}
 
@@ -76,10 +76,10 @@ void prepare_websocket_hash(char *buffer, int buffer_length, char *key) {
 	char temp[8192 + 100];
 	sprintf(temp, "%s%s", key, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
-	char tempsha1[100];
+	char tempsha1[21];
 	SHA1(tempsha1, temp, strlen(temp));
 
-	base64_encode(strlen(tempsha1), (unsigned char*)tempsha1, buffer_length, buffer);
+	base64_encode(20, (unsigned char*)tempsha1, buffer_length, buffer);
 }
 
 void receive_client(FILE *cread, FILE *cwrite, struct websocket_callbacks callbacks, void *userobj1) {
@@ -151,7 +151,7 @@ void receive_client(FILE *cread, FILE *cwrite, struct websocket_callbacks callba
 
 	void *userobj2 = callbacks.client_connected(userobj1, cwrite);
 	read_websocket_stream(cread, cwrite, callbacks, userobj1, userobj2);
-	callbacks.client_disconnected(userobj1, cwrite, userobj2);
+	callbacks.client_disconnected(userobj1, userobj2);
 }
 
 void* receive_client_thread(void *ptr) {

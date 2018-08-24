@@ -126,7 +126,7 @@ void read_websocket_stream(FILE *cread, FILE *cwrite, struct websocket_callbacks
 			if (previous_type == 1) {
 				data[previous_length] = '\0';
 
-				callbacks.message_received(userobj1, cwrite, userobj2, data);
+				callbacks.message_received(userobj1, userobj2, data);
 			} else if (previous_type == 2) {
 				// nothing to do
 			} else if (previous_type == 8) {
