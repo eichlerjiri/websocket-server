@@ -8,7 +8,8 @@
 #include <pthread.h>
 
 void fatal(char *msg, ...);
-void* callocx(size_t nmemb, size_t size);
+void* mallocx(size_t size);
+char* strdupx(const char *s);
 char* asprintfx(const char *fmt, ...);
 void freex(void *ptr);
 FILE *fdopenx(int fd, const char *mode);

@@ -9,8 +9,9 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <netinet/in.h>
 #include <pthread.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 void send_error(FILE *out, char *protocol, char *code, char *reason, char *body) {
 	fprintf(out, "%s %s %s\r\n"
@@ -80,7 +81,7 @@ int prepare_client(struct websocket_client *client) {
 		return -1;
 	}
 
-	printf("METHOD: %s, PROTOCOL: %s\n", method, protocol);
+	//printf("METHOD: %s, PROTOCOL: %s\n", method, protocol);
 
 	int upgrade_websocket = 0;
 	int connection_upgrade = 0;
@@ -110,9 +111,12 @@ int prepare_client(struct websocket_client *client) {
 			connection_upgrade = 1;
 		} else if (!strcasecmp(key, "sec-websocket-key")) {
 			hash_websocket_key(hash, value);
+		} else if (!strcasecmp(key, "x-forwarded-for")) {
+			freex(client->cipaddr);
+			client->cipaddr = strdupx(value);
 		}
 
-		printf("HEADER: %s __ %s\n", key, value);
+		//printf("HEADER: %s __ %s\n", key, value);
 	}
 
 	if (!upgrade_websocket || !connection_upgrade || !hash[0]) {
@@ -131,8 +135,12 @@ void* start_client(void *ptr) {
 	client->out = fdopenx(dupx(client->cfd), "w");
 
 	if (!prepare_client(client)) {
+		printf("Open %s\n", client->cipaddr);
 		client->ctx->connected(client);
+
 		read_websocket_stream(client);
+
+		printf("Close %s\n", client->cipaddr);
 		client->ctx->disconnected(client); // responsible for closing both streams
 	} else {
 		websocket_close(client);
@@ -152,7 +160,7 @@ void websocket_listen(int port, struct websocket_context *ctx) {
 		fatal("Cannot set reuseaddr: %s", strerror(errno));
 	}
 
-	struct sockaddr_in saddr = {0};
+	struct sockaddr_in saddr;
 	saddr.sin_family = AF_INET;
 	saddr.sin_port = htons(port);
 	saddr.sin_addr.s_addr = INADDR_ANY;
@@ -168,15 +176,16 @@ void websocket_listen(int port, struct websocket_context *ctx) {
 	printf("Listening on %i\n", port);
 
 	while (1) {
-		struct sockaddr_in caddr = {0};
-		unsigned int csize = sizeof(caddr);
+		struct sockaddr_in caddr;
+		socklen_t csize = sizeof(caddr);
 		int cfd = accept(sfd, (struct sockaddr*) &caddr, &csize);
 		if (cfd < 0) {
 			fatal("Cannot accept client: %s", strerror(errno));
 		}
 
-		struct websocket_client *client = callocx(1, sizeof(struct websocket_client));
+		struct websocket_client *client = mallocx(sizeof(struct websocket_client));
 		client->ctx = ctx;
+		client->cipaddr = strdupx(inet_ntoa(caddr.sin_addr));
 		client->cfd = cfd;
 
 		pthread_createx(start_client, client);
@@ -186,5 +195,6 @@ void websocket_listen(int port, struct websocket_context *ctx) {
 void websocket_close(struct websocket_client *client) {
 	fclosex(client->in);
 	fclosex(client->out);
+	freex(client->cipaddr);
 	freex(client);
 }

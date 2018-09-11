@@ -14,6 +14,7 @@ struct websocket_context {
 
 struct websocket_client {
 	struct websocket_context *ctx;
+	char *cipaddr;
 	int cfd;
 	FILE *in;
 	FILE *out;

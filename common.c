@@ -18,13 +18,24 @@ void fatal(char *msg, ...) {
 	exit(1);
 }
 
-void* callocx(size_t nmemb, size_t size) {
-	void *ret = calloc(nmemb, size);
+void* mallocx(size_t size) {
+	void *ret = malloc(size);
 	if (!ret) {
-		fatal("Cannot calloc %li x %li: %s", nmemb, size, strerror(errno));
+		fatal("Cannot malloc %li: %s", size, strerror(errno));
 	}
 #ifdef TRACE_H
-	trace_start("MEM", ret, "calloc");
+	trace_start("MEM", ret, "malloc");
+#endif
+	return ret;
+}
+
+char* strdupx(const char *s) {
+	char *ret = strdup(s);
+	if (!ret) {
+		fatal("Cannot strdup: %s", strerror(errno));
+	}
+#ifdef TRACE_H
+	trace_start("MEM", ret, "strdup");
 #endif
 	return ret;
 }
