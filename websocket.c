@@ -19,11 +19,11 @@ uint16_t reverse16(uint16_t x) {
 uint64_t reverse64(uint64_t x) {
 	x = (x & 0x00000000FFFFFFFF) << 32 | (x & 0xFFFFFFFF00000000) >> 32;
 	x = (x & 0x0000FFFF0000FFFF) << 16 | (x & 0xFFFF0000FFFF0000) >> 16;
-	x = (x & 0x00FF00FF00FF00FF) << 8  | (x & 0xFF00FF00FF00FF00) >> 8;
+	x = (x & 0x00FF00FF00FF00FF) << 8 | (x & 0xFF00FF00FF00FF00) >> 8;
 	return x;
 }
 
-void send_to_client(FILE *cwrite, int opcode, char *data, uint64_t length) {
+void send_packet(FILE *out, int opcode, char *text, uint64_t length) {
 	int extra_length = 0;
 
 	struct websocket_header h;
@@ -41,107 +41,111 @@ void send_to_client(FILE *cwrite, int opcode, char *data, uint64_t length) {
 	}
 	h.mask = 0;
 
-	fwrite(&h, 2, 1, cwrite);
+	fwrite(&h, 2, 1, out);
 
 	if (extra_length == 1) {
 		uint16_t val = reverse16((uint16_t) length);
-		fwrite(&val, 2, 1, cwrite);
+		fwrite(&val, 2, 1, out);
 	} else if (extra_length == 2) {
 		uint64_t val = reverse64(length);
-		fwrite(&val, 8, 1, cwrite);
+		fwrite(&val, 8, 1, out);
 	}
 
-	fwrite(data, length, 1, cwrite);
-	fflush(cwrite);
+	fwrite(text, length, 1, out);
+	fflush(out);
 }
 
-void send_close(FILE *cwrite, char *text) {
-	send_to_client(cwrite, 8, text, strlen(text));
+void websocket_send(FILE *out, char *text) {
+	send_packet(out, 0x1, text, strlen(text));
 }
 
-void read_websocket_stream(FILE *cread, FILE *cwrite, struct websocket_callbacks callbacks, void *userobj1, void *userobj2) {
+void send_close(FILE *out, char *text) {
+	send_packet(out, 0x8, text, strlen(text));
+}
+
+void read_websocket_stream(struct websocket_client *client) {
 	char data[8192];
-	uint64_t previous_length = 0;
-	unsigned int previous_type = 0;
+	uint64_t length = 0;
+	unsigned int opcode = 0;
 
 	while (1) {
 		struct websocket_header h;
-		if (fread(&h, 2, 1, cread) != 1) {
+		if (fread(&h, 2, 1, client->in) != 1) {
 			return;
 		}
-		printf("FIN: %i, RESERVED: %i, OPCODE: %i, MASK: %i, LENGTH: %i\n", h.fin, h.reserved, h.opcode, h.mask, h.length);
+		//printf("FIN: %i, RESERVED: %i, OPCODE: %i, MASK: %i, LENGTH: %i\n",
+		//	h.fin, h.reserved, h.opcode, h.mask, h.length);
 
 		if (h.mask != 1) {
-			send_close(cwrite, "1002 Protocol error");
+			send_close(client->out, "1002 Protocol error");
 			return;
 		}
 
-		if (previous_type > 0 && h.opcode != 0) {
-			send_close(cwrite, "1002 Protocol error");
+		if (opcode && h.opcode) {
+			send_close(client->out, "1002 Protocol error");
 			return;
-		} else if (previous_type == 0 && h.opcode == 0) {
-			send_close(cwrite, "1002 Protocol error");
+		} else if (!opcode && !h.opcode) {
+			send_close(client->out, "1002 Protocol error");
 			return;
 		}
 
-		if (h.opcode != 0) {
-			previous_type = h.opcode;
+		if (h.opcode) {
+			opcode = h.opcode;
 		}
 
-		uint64_t length = h.length;
-		if (length == 126) {
+		uint64_t curlength = h.length;
+		if (curlength == 126) {
 			uint16_t val;
-			if (fread(&val, 2, 1, cread) != 1) {
+			if (fread(&val, 2, 1, client->in) != 1) {
 				return;
 			}
-			length = reverse16(val);
-		} else if (length == 127) {
-			if (fread(&length, 8, 1, cread) != 1) {
+			curlength = reverse16(val);
+		} else if (curlength == 127) {
+			if (fread(&curlength, 8, 1, client->in) != 1) {
 				return;
 			}
-			length = reverse64(length);
+			curlength = reverse64(curlength);
 		}
 
-		if (length >= sizeof(data) || length + previous_length >= sizeof(data)) { // beware overflow
-			send_close(cwrite, "1009 Message Too Big");
+		if (curlength >= sizeof(data) || curlength + length >= sizeof(data)) { // beware overflow
+			send_close(client->out, "1009 Message Too Big");
 			return;
 		}
 
 		char xor_mask[4];
-		if (fread(xor_mask, 4, 1, cread) != 1) {
+		if (fread(xor_mask, 4, 1, client->in) != 1) {
 			return;
 		}
 
-		if (fread(data + previous_length, length, 1, cread) != 1) {
+		if (fread(data + length, curlength, 1, client->in) != 1) {
 			return;
 		}
 
-		for (int i = 0; i < length; i++) {
-			data[previous_length + i] = data[previous_length + i] ^ xor_mask[i % 4];
+		for (int i = 0; i < curlength; i++) {
+			data[length + i] = data[length + i] ^ xor_mask[i % 4];
 		}
 
-		previous_length += length;
+		length += curlength;
 
 		if (h.fin == 1) {
-			if (previous_type == 1) {
-				data[previous_length] = '\0';
-
-				callbacks.message_received(userobj1, userobj2, data);
-			} else if (previous_type == 2) {
+			if (opcode == 1) {
+				data[length] = '\0';
+				client->ctx->received(client, data);
+			} else if (opcode == 2) {
 				// nothing to do
-			} else if (previous_type == 8) {
-				send_close(cwrite, "1000 Normal Closure");
-			} else if (previous_type == 9) {
-				send_to_client(cwrite, 0xA, data, previous_length);
-			} else if (previous_type == 10) {
+			} else if (opcode == 8) {
+				send_close(client->out, "1000 Normal Closure");
+			} else if (opcode == 9) {
+				send_packet(client->out, 0xA, data, length);
+			} else if (opcode == 10) {
 				// nothing to do
 			} else {
-				send_close(cwrite, "1002 Protocol error");
+				send_close(client->out, "1002 Protocol error");
 				return;
 			}
 
-			previous_length = 0;
-			previous_type = 0;
+			length = 0;
+			opcode = 0;
 		}
 	}
 }

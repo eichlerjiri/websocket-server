@@ -3,12 +3,24 @@
 
 #include <stdio.h>
 
-struct websocket_callbacks {
-	void *(*client_connected)(void*, FILE*);
-	void (*client_disconnected)(void*, void*);
-	void (*message_received)(void*, void*, char*);
+struct websocket_client;
+
+struct websocket_context {
+	void (*connected)(struct websocket_client*);
+	void (*disconnected)(struct websocket_client*);
+	void (*received)(struct websocket_client*, char*);
+	void *ex;
 };
 
-void start_server(int port, struct websocket_callbacks callbacks, void *userobj1);
+struct websocket_client {
+	struct websocket_context *ctx;
+	int cfd;
+	FILE *in;
+	FILE *out;
+	void *ex;
+};
+
+void websocket_listen(int port, struct websocket_context *ctx);
+void websocket_close(struct websocket_client *client);
 
 #endif

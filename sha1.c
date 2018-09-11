@@ -258,7 +258,8 @@ void SHA1Final(
 #else
     for (i = 0; i < 8; i++)
     {
-        finalcount[i] = (unsigned char) ((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255);      /* Endian independent */
+        /* Endian independent */
+        finalcount[i] = (unsigned char) ((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255);
     }
 #endif
     c = 0200;
@@ -291,6 +292,6 @@ void SHA1(
     for (ii=0; ii<len; ii+=1)
         SHA1Update(&ctx, (const unsigned char*)str + ii, 1);
     SHA1Final((unsigned char *)hash_out, &ctx);
-    hash_out[20] = '\0';
+    //hash_out[20] = '\0';
 }
 

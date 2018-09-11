@@ -1,6 +1,6 @@
 OUTNAME=websocket-server.a
 
-all: server.o websocket.o sha1.o base64.o common.o
+all: common.o trace.o sha1.o base64.o server.o websocket.o
 	ar rcs $(OUTNAME) $^
 
 %.o : %.c

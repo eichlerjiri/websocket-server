@@ -1,4 +1,5 @@
 #include "common.h"
+#include "trace.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -17,75 +18,75 @@ void fatal(char *msg, ...) {
 	exit(1);
 }
 
-void* calloc_x(size_t nmemb, size_t size) {
+void* callocx(size_t nmemb, size_t size) {
 	void *ret = calloc(nmemb, size);
-	if (ret == NULL) {
-		fatal("Cannot alocate memory: %li x %li", nmemb, size);
+	if (!ret) {
+		fatal("Cannot calloc %li x %li: %s", nmemb, size, strerror(errno));
 	}
+#ifdef TRACE_H
+	trace_start("MEM", ret, "calloc");
+#endif
 	return ret;
 }
 
-void pthread_mutex_init_x(pthread_mutex_t *restrict mutex) {
-	int ret = pthread_mutex_init(mutex, NULL);
-	if (ret != 0) {
-		fatal("Cannot create mutex: %i", ret);
+char* asprintfx(const char *fmt, ...) {
+	va_list valist;
+	va_start(valist, fmt);
+
+	char *ret;
+	if (vasprintf(&ret, fmt, valist) < 0) {
+		fatal("Cannot asprintf %s: %s", fmt, strerror(errno));
 	}
+
+	va_end(valist);
+#ifdef TRACE_H
+	trace_start("MEM", ret, "asprintf");
+#endif
+	return ret;
 }
 
-void pthread_mutex_lock_x(pthread_mutex_t *mutex) {
-	int ret = pthread_mutex_lock(mutex);
-	if (ret != 0) {
-		fatal("Cannot lock mutex: %i", ret);
-	}
+void freex(void *ptr) {
+#ifdef TRACE_H
+	trace_end("MEM", ptr, "free");
+#endif
+	free(ptr);
 }
 
-void pthread_mutex_unlock_x(pthread_mutex_t *mutex) {
-	int ret = pthread_mutex_unlock(mutex);
-	if (ret != 0) {
-		fatal("Cannot unlock mutex: %i", ret);
-	}
-}
-
-void pthread_cond_init_x(pthread_cond_t *restrict cond) {
-	int ret = pthread_cond_init(cond, NULL);
-	if (ret != 0) {
-		fatal("Cannot create cond: %i", ret);
-	}
-}
-
-void pthread_cond_wait_x(pthread_cond_t *cond, pthread_mutex_t *lock) {
-	int ret = pthread_cond_wait(cond, lock);
-	if (ret != 0) {
-		fatal("Cannot wait on cond: %i", ret);
-	}
-}
-
-void pthread_cond_signal_x(pthread_cond_t *cond) {
-	int ret = pthread_cond_signal(cond);
-	if (ret != 0) {
-		fatal("Cannot wait on cond: %i", ret);
-	}
-}
-
-FILE *fdopen_x(int fd, const char *mode) {
+FILE *fdopenx(int fd, const char *mode) {
 	FILE *ret = fdopen(fd, mode);
-	if (ret == NULL) {
-		fatal("Cannot fdopen socket: %s", strerror(errno));
+	if (!ret) {
+		fatal("Cannot fdopen %i: %s", fd, strerror(errno));
+	}
+#ifdef TRACE_H
+	trace_start("FIL", ret, "fdopen");
+#endif
+	return ret;
+}
+
+int fclosex(FILE *stream) {
+#ifdef TRACE_H
+	trace_end("FIL", stream, "fclose");
+#endif
+	int ret = fclose(stream);
+	if (ret) {
+		fatal("Cannot fclose: %s", strerror(errno));
 	}
 	return ret;
 }
 
-int dup_x(int fd) {
+int dupx(int fd) {
 	int ret = dup(fd);
 	if (ret < 0) {
-		fatal("Cannot dup fd: %s", strerror(errno));
+		fatal("Cannot dup %i: %s", fd, strerror(errno));
 	}
 	return ret;
 }
 
-void pthread_create_x(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine) (void *), void *arg) {
-	int ret = pthread_create(thread, attr, start_routine, arg);
-	if (ret != 0) {
-		fatal("Cannot create thread: %i", ret);
+void pthread_createx(void *(*start_routine)(void *), void *arg) {
+	pthread_t thread;
+
+	int ret = pthread_create(&thread, NULL, start_routine, arg);
+	if (ret) {
+		fatal("Cannot pthread_create: %s", strerror(ret));
 	}
 }

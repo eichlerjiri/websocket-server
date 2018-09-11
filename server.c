@@ -12,205 +12,179 @@
 #include <netinet/in.h>
 #include <pthread.h>
 
-struct to_recv_thread {
-	struct websocket_callbacks callbacks;
-	int clientfd;
-	void *userobj1;
-};
-
-void send_error_response(FILE *cwrite, char *protocol, char *code, char *reason, char *body) {
-	fprintf(cwrite, "%s %s %s\r\n"
+void send_error(FILE *out, char *protocol, char *code, char *reason, char *body) {
+	fprintf(out, "%s %s %s\r\n"
 		"Connection: Closed\r\n"
 		"\r\n"
 	"%s", protocol, code, reason, body);
-	fflush(cwrite);
+	fflush(out);
 }
 
-void send_bad_request(FILE *cwrite, char *protocol) {
-	send_error_response(cwrite, protocol, "400", "Bad Request", "");
+void send_400(FILE *out, char *protocol) {
+	send_error(out, protocol, "400", "Bad Request", "");
 }
 
-void send_bad_request_pre(FILE *cwrite) {
-	send_bad_request(cwrite, "HTTP/1.1");
+void send_400_pre(FILE *out) {
+	send_400(out, "HTTP/1.1");
 }
 
-void send_method_not_allowed(FILE *cwrite, char *protocol) {
-	send_error_response(cwrite, protocol, "405", "Method Not Allowed", "");
+void send_405(FILE *out, char *protocol) {
+	send_error(out, protocol, "405", "Method Not Allowed", "");
 }
 
-void send_not_found(FILE *cwrite, char *protocol) {
-	send_error_response(cwrite, protocol, "404", "Not Found", "");
+void send_404(FILE *out, char *protocol) {
+	send_error(out, protocol, "404", "Not Found", "");
 }
 
-void send_switching(FILE *cwrite, char *protocol, char *websocket_hash) {
-	fprintf(cwrite, "%s 101 Switching Protocols\r\n"
+void send_switching(FILE *out, char *protocol, char *websocket_hash) {
+	fprintf(out, "%s 101 Switching Protocols\r\n"
 		"Upgrade: WebSocket\r\n"
 		"Connection: Upgrade\r\n"
 		"Sec-WebSocket-Accept: %s\r\n"
 	"\r\n", protocol, websocket_hash);
-	fflush(cwrite);
+	fflush(out);
 }
 
-int read_line(FILE *cread, char *buffer, int length) {
-	if (!fgets(buffer, length, cread)) {
-		return -1;
-	}
+void hash_websocket_key(char out[30], char *key) {
+	char *input = asprintfx("%s%s", key, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
-	char *pos1 = strchr(buffer, '\r');
-	char *pos2 = strchr(buffer, '\n');
-	if (!pos1 && !pos2) {
-		return -1;
-	}
+	char hash[20];
+	SHA1(hash, input, strlen(input));
+	base64_encode(sizeof(hash), (unsigned char*)hash, 30, out);
 
-	if (pos1) {
-		*pos1 = '\0';
-	}
-	if (pos2) {
-		*pos2 = '\0';
-	}
-
-	return 0;
+	freex(input);
 }
 
-void prepare_websocket_hash(char *buffer, int buffer_length, char *key) {
-	char temp[8192 + 100];
-	sprintf(temp, "%s%s", key, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-
-	char tempsha1[21];
-	SHA1(tempsha1, temp, strlen(temp));
-
-	base64_encode(20, (unsigned char*)tempsha1, buffer_length, buffer);
-}
-
-void receive_client(FILE *cread, FILE *cwrite, struct websocket_callbacks callbacks, void *userobj1) {
+int prepare_client(struct websocket_client *client) {
 	char line[8192];
-	if (read_line(cread, line, sizeof(line)) < 0) {
-		send_bad_request_pre(cwrite);
-		return;
+	if (!fgets(line, sizeof(line), client->in)) {
+		send_400_pre(client->out);
+		return -1;
 	}
 
 	char method[16];
 	char protocol[16];
-	if (sscanf(line, "%15s %*s %15s", method, protocol) < 2) {
-		send_bad_request_pre(cwrite);
-		return;
+	if (sscanf(line, "%15s %*s %15s", method, protocol) != 2) {
+		send_400_pre(client->out);
+		return -1;
 	}
 
 	char protocolTest[] = "HTTP/";
-	if (strncmp(protocolTest, protocol, strlen(protocolTest)) != 0) {
-		send_bad_request_pre(cwrite);
-		return;
+	if (strncasecmp(protocolTest, protocol, strlen(protocolTest))) {
+		send_400_pre(client->out);
+		return -1;
 	}
 
-	if (strcmp(method, "GET") != 0) {
-		send_method_not_allowed(cwrite, protocol);
-		return;
+	if (strcasecmp(method, "GET")) {
+		send_405(client->out, protocol);
+		return -1;
 	}
 
 	printf("METHOD: %s, PROTOCOL: %s\n", method, protocol);
 
 	int upgrade_websocket = 0;
 	int connection_upgrade = 0;
-	char websocket_hash[100];
-	websocket_hash[0] = '\0';
+	char hash[30];
+	hash[0] = '\0';
 
 	while (1) {
-		if (read_line(cread, line, sizeof(line)) < 0) {
-			send_bad_request(cwrite, protocol);
-			return;
+		if (!fgets(line, sizeof(line), client->in)) {
+			send_400(client->out, protocol);
+			return -1;
 		}
 
-		if (strlen(line) == 0) {
+		if (!strcspn(line, "\r\n")) {
 			break;
 		}
 
 		char key[8192];
 		char value[8192];
-		if (sscanf(line, "%[^:]:%s", key, value) < 2) {
-			send_bad_request(cwrite, protocol);
-			return;
+		if (sscanf(line, "%[^:]:%s", key, value) != 2) {
+			send_400(client->out, protocol);
+			return -1;
 		}
 
-		if (strcasecmp(key, "upgrade") == 0 && strcasecmp(value, "websocket") == 0) {
+		if (!strcasecmp(key, "upgrade") && !strcasecmp(value, "websocket")) {
 			upgrade_websocket = 1;
-		} else if (strcasecmp(key, "connection") == 0 && strcasecmp(value, "upgrade") == 0) {
+		} else if (!strcasecmp(key, "connection") && !strcasecmp(value, "upgrade")) {
 			connection_upgrade = 1;
-		} else if (strcasecmp(key, "sec-websocket-key") == 0) {
-			prepare_websocket_hash(websocket_hash, sizeof(websocket_hash), value);
+		} else if (!strcasecmp(key, "sec-websocket-key")) {
+			hash_websocket_key(hash, value);
 		}
 
 		printf("HEADER: %s __ %s\n", key, value);
 	}
 
-	if (upgrade_websocket == 0 || connection_upgrade == 0 || websocket_hash[0] == '\0') {
-		send_not_found(cwrite, protocol);
-		return;
+	if (!upgrade_websocket || !connection_upgrade || !hash[0]) {
+		send_404(client->out, protocol);
+		return -1;
 	}
 
-	send_switching(cwrite, protocol, websocket_hash);
-
-	void *userobj2 = callbacks.client_connected(userobj1, cwrite);
-	read_websocket_stream(cread, cwrite, callbacks, userobj1, userobj2);
-	callbacks.client_disconnected(userobj1, userobj2);
+	send_switching(client->out, protocol, hash);
+	return 0;
 }
 
-void* receive_client_thread(void *ptr) {
-	struct to_recv_thread *d = ptr;
-	int clientfd = d->clientfd;
-	struct websocket_callbacks callbacks = d->callbacks;
-	void *userobj1 = d->userobj1;
-	free(ptr);
+void* start_client(void *ptr) {
+	struct websocket_client *client = ptr;
 
-	FILE *cread = fdopen_x(clientfd, "r");
-	FILE *cwrite = fdopen_x(dup_x(clientfd), "w");
-	receive_client(cread, cwrite, callbacks, userobj1);
-	fclose(cread); // not closing write, app will do that
+	client->in = fdopenx(client->cfd, "r");
+	client->out = fdopenx(dupx(client->cfd), "w");
+
+	if (!prepare_client(client)) {
+		client->ctx->connected(client);
+		read_websocket_stream(client);
+		client->ctx->disconnected(client); // responsible for closing both streams
+	} else {
+		websocket_close(client);
+	}
 
 	return NULL;
 }
 
-void receive_client_threaded(int clientfd, struct websocket_callbacks callbacks, void *userobj1) {
-	struct to_recv_thread *ptr = calloc_x(1, sizeof(struct to_recv_thread));
-	ptr->clientfd = clientfd;
-	ptr->callbacks = callbacks;
-	ptr->userobj1 = userobj1;
-
-	pthread_t thread;
-	pthread_create_x(&thread, NULL, receive_client_thread, ptr);
-}
-
-void start_server(int port, struct websocket_callbacks callbacks, void *userobj1) {
-	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
+void websocket_listen(int port, struct websocket_context *ctx) {
+	int sfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sfd < 0) {
 		fatal("Cannot create socket: %s", strerror(errno));
 	}
 
 	int enable = 1;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
+	if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0) {
 		fatal("Cannot set reuseaddr: %s", strerror(errno));
 	}
 
-	struct sockaddr_in serv_addr = {0};
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(port);
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	struct sockaddr_in saddr = {0};
+	saddr.sin_family = AF_INET;
+	saddr.sin_port = htons(port);
+	saddr.sin_addr.s_addr = INADDR_ANY;
 
-	if (bind(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
+	if (bind(sfd, (struct sockaddr*) &saddr, sizeof(saddr)) < 0) {
 		fatal("Cannot bind server: %s", strerror(errno));
 	}
 
-	if (listen(sockfd, 32) < 0) {
+	if (listen(sfd, 32) < 0) {
 		fatal("Cannot listen: %s", strerror(errno));
 	}
+
 	printf("Listening on %i\n", port);
 
 	while (1) {
-		struct sockaddr_in cli_addr = {0};
-		unsigned int cli_len = sizeof(cli_addr);
-		int clientfd = accept(sockfd, (struct sockaddr*) &cli_addr, &cli_len);
-		if (clientfd < 0) {
+		struct sockaddr_in caddr = {0};
+		unsigned int csize = sizeof(caddr);
+		int cfd = accept(sfd, (struct sockaddr*) &caddr, &csize);
+		if (cfd < 0) {
 			fatal("Cannot accept client: %s", strerror(errno));
 		}
-		receive_client_threaded(clientfd, callbacks, userobj1);
+
+		struct websocket_client *client = callocx(1, sizeof(struct websocket_client));
+		client->ctx = ctx;
+		client->cfd = cfd;
+
+		pthread_createx(start_client, client);
 	}
+}
+
+void websocket_close(struct websocket_client *client) {
+	fclosex(client->in);
+	fclosex(client->out);
+	freex(client);
 }
