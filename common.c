@@ -6,7 +6,7 @@
 #include <string.h>
 #include <errno.h>
 
-void fatal(char *msg, ...) {
+void fatal(const char *msg, ...) {
 	va_list valist;
 	va_start(valist, msg);
 
@@ -15,7 +15,7 @@ void fatal(char *msg, ...) {
 	fprintf(stderr, "\033[0m\n");
 
 	va_end(valist);
-	exit(1);
+	exit(2);
 }
 
 void* mallocx(size_t size) {

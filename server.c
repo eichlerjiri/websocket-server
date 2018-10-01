@@ -5,7 +5,6 @@
 #include "common.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -13,7 +12,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-void send_error(FILE *out, char *protocol, char *code, char *reason, char *body) {
+void send_error(FILE *out, const char *protocol, const char *code, const char *reason, const char *body) {
 	fprintf(out, "%s %s %s\r\n"
 		"Connection: Closed\r\n"
 		"\r\n"
@@ -21,7 +20,7 @@ void send_error(FILE *out, char *protocol, char *code, char *reason, char *body)
 	fflush(out);
 }
 
-void send_400(FILE *out, char *protocol) {
+void send_400(FILE *out, const char *protocol) {
 	send_error(out, protocol, "400", "Bad Request", "");
 }
 
@@ -29,15 +28,15 @@ void send_400_pre(FILE *out) {
 	send_400(out, "HTTP/1.1");
 }
 
-void send_405(FILE *out, char *protocol) {
+void send_405(FILE *out, const char *protocol) {
 	send_error(out, protocol, "405", "Method Not Allowed", "");
 }
 
-void send_404(FILE *out, char *protocol) {
+void send_404(FILE *out, const char *protocol) {
 	send_error(out, protocol, "404", "Not Found", "");
 }
 
-void send_switching(FILE *out, char *protocol, char *websocket_hash) {
+void send_switching(FILE *out, const char *protocol, const char *websocket_hash) {
 	fprintf(out, "%s 101 Switching Protocols\r\n"
 		"Upgrade: WebSocket\r\n"
 		"Connection: Upgrade\r\n"
@@ -46,7 +45,7 @@ void send_switching(FILE *out, char *protocol, char *websocket_hash) {
 	fflush(out);
 }
 
-void hash_websocket_key(char out[30], char *key) {
+void hash_websocket_key(char out[30], const char *key) {
 	char *input = asprintfx("%s%s", key, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
 	char hash[20];
@@ -149,7 +148,7 @@ void* start_client(void *ptr) {
 	return NULL;
 }
 
-void websocket_listen(int port, struct websocket_context *ctx) {
+void websocket_listen(uint16_t port, struct websocket_context *ctx) {
 	int sfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sfd < 0) {
 		fatal("Cannot create socket: %s", strerror(errno));

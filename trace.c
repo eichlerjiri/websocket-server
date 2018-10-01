@@ -3,7 +3,7 @@
 
 FILE *ftrace;
 
-void trace_print(char op, char *type, void *id, char *comment) {
+void trace_print(char op, const char *type, void *id, const char *comment) {
 	if (!ftrace) {
 		ftrace = fopen("trace.txt", "w");
 		if (!ftrace) {
@@ -15,10 +15,10 @@ void trace_print(char op, char *type, void *id, char *comment) {
 	fflush(ftrace);
 }
 
-void trace_start(char *type, void *id, char *comment) {
+void trace_start(const char *type, void *id, const char *comment) {
 	trace_print('A', type, id, comment);
 }
 
-void trace_end(char *type, void* id, char *comment) {
+void trace_end(const char *type, void* id, const char *comment) {
 	trace_print('F', type, id, comment);
 }

@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
-void fatal(char *msg, ...);
+void fatal(const char *msg, ...);
 void* mallocx(size_t size);
 char* strdupx(const char *s);
 char* asprintfx(const char *fmt, ...);

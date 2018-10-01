@@ -5,15 +5,15 @@
 #include <stdint.h>
 
 struct websocket_header {
-	unsigned int opcode : 4;
-	unsigned int reserved : 3;
-	unsigned int fin : 1;
-	unsigned int length : 7;
-	unsigned int mask : 1;
+	unsigned char opcode : 4;
+	unsigned char reserved : 3;
+	unsigned char fin : 1;
+	unsigned char length : 7;
+	unsigned char mask : 1;
 };
 
 uint16_t reverse16(uint16_t x) {
-	return ((x & 0x00FF) << 8) | ((x & 0xFF00) >> 8);
+	return ((x & 0x00FFu) << 8 | (x & 0xFF00u) >> 8) & 0xFFFFu;
 }
 
 uint64_t reverse64(uint64_t x) {
@@ -23,15 +23,15 @@ uint64_t reverse64(uint64_t x) {
 	return x;
 }
 
-void send_packet(FILE *out, int opcode, char *text, uint64_t length) {
+void send_packet(FILE *out, unsigned char opcode, const char *text, uint64_t length) {
 	int extra_length = 0;
 
 	struct websocket_header h;
-	h.opcode = opcode;
+	h.opcode = opcode & 0x7;
 	h.reserved = 0;
 	h.fin = 1;
 	if (length <= 125) {
-		h.length = length;
+		h.length = length & 0x7F;
 	} else if (length <= 65535) {
 		h.length = 126;
 		extra_length = 1;
@@ -44,7 +44,7 @@ void send_packet(FILE *out, int opcode, char *text, uint64_t length) {
 	fwrite(&h, 2, 1, out);
 
 	if (extra_length == 1) {
-		uint16_t val = reverse16((uint16_t) length);
+		uint16_t val = reverse16(length & 0xFFFF);
 		fwrite(&val, 2, 1, out);
 	} else if (extra_length == 2) {
 		uint64_t val = reverse64(length);
@@ -55,18 +55,18 @@ void send_packet(FILE *out, int opcode, char *text, uint64_t length) {
 	fflush(out);
 }
 
-void websocket_send(FILE *out, char *text) {
+void websocket_send(FILE *out, const char *text) {
 	send_packet(out, 0x1, text, strlen(text));
 }
 
-void send_close(FILE *out, char *text) {
+void send_close(FILE *out, const char *text) {
 	send_packet(out, 0x8, text, strlen(text));
 }
 
 void read_websocket_stream(struct websocket_client *client) {
 	char data[8192];
 	uint64_t length = 0;
-	unsigned int opcode = 0;
+	unsigned char opcode = 0;
 
 	while (1) {
 		struct websocket_header h;
@@ -121,7 +121,7 @@ void read_websocket_stream(struct websocket_client *client) {
 			return;
 		}
 
-		for (int i = 0; i < curlength; i++) {
+		for (unsigned int i = 0; i < curlength; i++) {
 			data[length + i] = data[length + i] ^ xor_mask[i % 4];
 		}
 

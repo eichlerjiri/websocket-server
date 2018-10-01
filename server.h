@@ -2,13 +2,14 @@
 #define SERVER_H
 
 #include <stdio.h>
+#include <stdint.h>
 
 struct websocket_client;
 
 struct websocket_context {
 	void (*connected)(struct websocket_client*);
 	void (*disconnected)(struct websocket_client*);
-	void (*received)(struct websocket_client*, char*);
+	void (*received)(struct websocket_client*, const char*);
 	void *ex;
 };
 
@@ -21,7 +22,7 @@ struct websocket_client {
 	void *ex;
 };
 
-void websocket_listen(int port, struct websocket_context *ctx);
+void websocket_listen(uint16_t port, struct websocket_context *ctx);
 void websocket_close(struct websocket_client *client);
 
 #endif

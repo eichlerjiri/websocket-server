@@ -38,6 +38,6 @@ void SHA1Final(
 void SHA1(
     char *hash_out,
     const char *str,
-    int len);
+    size_t len);
 
 #endif

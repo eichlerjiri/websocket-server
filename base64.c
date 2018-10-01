@@ -45,20 +45,20 @@ int base64decode(const char in[4], char out[3])
 	v[2]=base64dec_tab[(unsigned)in[2]];
 	v[3]=base64dec_tab[(unsigned)in[3]];
 
-	out[0]=(v[0]<<2)|(v[1]>>4); 
-	out[1]=(v[1]<<4)|(v[2]>>2); 
-	out[2]=(v[2]<<6)|(v[3]); 
+	out[0]=(char)((v[0]<<2)|(v[1]>>4));
+	out[1]=(char)((v[1]<<4)|(v[2]>>2));
+	out[2]=(char)((v[2]<<6)|(v[3]));
 	return (v[0]|v[1]|v[2]|v[3])!=255 ? in[3]=='=' ? in[2]=='=' ? 1 : 2 : 3 : 0;
 }
 
 /* decode a base64 string in one shot */
 int base64_decode(size_t in_len, const char *in, size_t out_len, unsigned char *out) {
-	unsigned ii, io;
+	int ii, io;
 	uint_least32_t v;
 	unsigned rem;
 
 	for(io=0,ii=0,v=0,rem=0;ii<in_len;ii++) {
-		unsigned char ch;
+		uint8_t ch;
 		if(isspace(in[ii])) continue;
 		if(in[ii]=='=') break; /* stop at = */
 		ch=base64dec_tab[(unsigned)in[ii]];
@@ -80,7 +80,7 @@ int base64_decode(size_t in_len, const char *in, size_t out_len, unsigned char *
 }
 
 int base64_encode(size_t in_len, const unsigned char *in, size_t out_len, char *out) {
-	unsigned ii, io;
+	int ii, io;
 	uint_least32_t v;
 	unsigned rem;
 
@@ -92,13 +92,13 @@ int base64_encode(size_t in_len, const unsigned char *in, size_t out_len, char *
 		while(rem>=6) {
 			rem-=6;
 			if(io>=out_len) return -1; /* truncation is failure */
-			out[io++]=base64enc_tab[(v>>rem)&63];
+			out[io++]=(char)base64enc_tab[(v>>rem)&63];
 		}
 	}
 	if(rem) {
 		v<<=(6-rem);
 		if(io>=out_len) return -1; /* truncation is failure */
-		out[io++]=base64enc_tab[v&63];
+		out[io++]=(char)base64enc_tab[v&63];
 	}
 	while(io&3) {
 		if(io>=out_len) return -1; /* truncation is failure */
