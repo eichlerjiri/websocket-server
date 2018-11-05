@@ -1,5 +1,7 @@
 #include "common.h"
+#if ENABLE_TRACE
 #include "trace.h"
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -18,29 +20,29 @@ void fatal(const char *msg, ...) {
 	exit(2);
 }
 
-void* mallocx(size_t size) {
+void* c_malloc(size_t size) {
 	void *ret = malloc(size);
 	if (!ret) {
 		fatal("Cannot malloc %li: %s", size, strerror(errno));
 	}
-#ifdef TRACE_H
+#if ENABLE_TRACE
 	trace_start("MEM", ret, "malloc");
 #endif
 	return ret;
 }
 
-char* strdupx(const char *s) {
+char* c_strdup(const char *s) {
 	char *ret = strdup(s);
 	if (!ret) {
 		fatal("Cannot strdup: %s", strerror(errno));
 	}
-#ifdef TRACE_H
+#if ENABLE_TRACE
 	trace_start("MEM", ret, "strdup");
 #endif
 	return ret;
 }
 
-char* asprintfx(const char *fmt, ...) {
+char* c_asprintf(const char *fmt, ...) {
 	va_list valist;
 	va_start(valist, fmt);
 
@@ -50,32 +52,34 @@ char* asprintfx(const char *fmt, ...) {
 	}
 
 	va_end(valist);
-#ifdef TRACE_H
+#if ENABLE_TRACE
 	trace_start("MEM", ret, "asprintf");
 #endif
 	return ret;
 }
 
-void freex(void *ptr) {
-#ifdef TRACE_H
-	trace_end("MEM", ptr, "free");
+void c_free(void *ptr) {
+#if ENABLE_TRACE
+	if (ptr) {
+		trace_end("MEM", ptr, "free");
+	}
 #endif
 	free(ptr);
 }
 
-FILE *fdopenx(int fd, const char *mode) {
+FILE *c_fdopen(int fd, const char *mode) {
 	FILE *ret = fdopen(fd, mode);
 	if (!ret) {
 		fatal("Cannot fdopen %i: %s", fd, strerror(errno));
 	}
-#ifdef TRACE_H
+#if ENABLE_TRACE
 	trace_start("FIL", ret, "fdopen");
 #endif
 	return ret;
 }
 
-int fclosex(FILE *stream) {
-#ifdef TRACE_H
+int c_fclose(FILE *stream) {
+#if ENABLE_TRACE
 	trace_end("FIL", stream, "fclose");
 #endif
 	int ret = fclose(stream);
@@ -85,7 +89,7 @@ int fclosex(FILE *stream) {
 	return ret;
 }
 
-int dupx(int fd) {
+int c_dup(int fd) {
 	int ret = dup(fd);
 	if (ret < 0) {
 		fatal("Cannot dup %i: %s", fd, strerror(errno));
@@ -93,7 +97,7 @@ int dupx(int fd) {
 	return ret;
 }
 
-void pthread_createx(void *(*start_routine)(void *), void *arg) {
+void c_pthread_create(void *(*start_routine)(void *), void *arg) {
 	pthread_t thread;
 
 	int ret = pthread_create(&thread, NULL, start_routine, arg);

@@ -46,13 +46,13 @@ void send_switching(FILE *out, const char *protocol, const char *websocket_hash)
 }
 
 void hash_websocket_key(char out[30], const char *key) {
-	char *input = asprintfx("%s%s", key, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+	char *input = c_asprintf("%s%s", key, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
 	char hash[20];
 	SHA1(hash, input, strlen(input));
 	base64_encode(sizeof(hash), (unsigned char*)hash, 30, out);
 
-	freex(input);
+	c_free(input);
 }
 
 int prepare_client(struct websocket_client *client) {
@@ -111,8 +111,8 @@ int prepare_client(struct websocket_client *client) {
 		} else if (!strcasecmp(key, "sec-websocket-key")) {
 			hash_websocket_key(hash, value);
 		} else if (!strcasecmp(key, "x-forwarded-for")) {
-			freex(client->cipaddr);
-			client->cipaddr = strdupx(value);
+			c_free(client->cipaddr);
+			client->cipaddr = c_strdup(value);
 		}
 
 		//printf("HEADER: %s __ %s\n", key, value);
@@ -130,8 +130,8 @@ int prepare_client(struct websocket_client *client) {
 void* start_client(void *ptr) {
 	struct websocket_client *client = ptr;
 
-	client->in = fdopenx(client->cfd, "r");
-	client->out = fdopenx(dupx(client->cfd), "w");
+	client->in = c_fdopen(client->cfd, "r");
+	client->out = c_fdopen(c_dup(client->cfd), "w");
 
 	if (!prepare_client(client)) {
 		printf("Open %s\n", client->cipaddr);
@@ -182,18 +182,18 @@ void websocket_listen(uint16_t port, struct websocket_context *ctx) {
 			fatal("Cannot accept client: %s", strerror(errno));
 		}
 
-		struct websocket_client *client = mallocx(sizeof(struct websocket_client));
+		struct websocket_client *client = c_malloc(sizeof(struct websocket_client));
 		client->ctx = ctx;
-		client->cipaddr = strdupx(inet_ntoa(caddr.sin_addr));
+		client->cipaddr = c_strdup(inet_ntoa(caddr.sin_addr));
 		client->cfd = cfd;
 
-		pthread_createx(start_client, client);
+		c_pthread_create(start_client, client);
 	}
 }
 
 void websocket_close(struct websocket_client *client) {
-	fclosex(client->in);
-	fclosex(client->out);
-	freex(client->cipaddr);
-	freex(client);
+	c_fclose(client->in);
+	c_fclose(client->out);
+	c_free(client->cipaddr);
+	c_free(client);
 }

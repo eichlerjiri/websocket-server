@@ -8,13 +8,13 @@
 #include <pthread.h>
 
 void fatal(const char *msg, ...);
-void* mallocx(size_t size);
-char* strdupx(const char *s);
-char* asprintfx(const char *fmt, ...);
-void freex(void *ptr);
-FILE *fdopenx(int fd, const char *mode);
-int fclosex(FILE *stream);
-int dupx(int fd);
-void pthread_createx(void *(*start_routine)(void *), void *arg);
+void* c_malloc(size_t size);
+char* c_strdup(const char *s);
+char* c_asprintf(const char *fmt, ...);
+void c_free(void *ptr);
+FILE *c_fdopen(int fd, const char *mode);
+int c_fclose(FILE *stream);
+int c_dup(int fd);
+void c_pthread_create(void *(*start_routine)(void *), void *arg);
 
 #endif
