@@ -2,7 +2,7 @@
 #include "websocket-server.h"
 #include "sha1.c"
 #include "base64.c"
-#include "decode.c"
+#include "protocol.c"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
