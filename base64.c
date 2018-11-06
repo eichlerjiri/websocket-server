@@ -1,12 +1,6 @@
 /* base64.c : base-64 / MIME encode/decode */
 /* PUBLIC DOMAIN - Jon Mayo - November 13, 2003 */
 /* $Id: base64.c 156 2007-07-12 23:29:10Z orange $ */
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include "base64.h"
-
 static const uint8_t base64enc_tab[64]= "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 static const uint8_t base64dec_tab[256]= {
@@ -28,7 +22,7 @@ static const uint8_t base64dec_tab[256]= {
 	255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
 };
 
-void base64encode(const unsigned char in[3], unsigned char out[4], int count)
+static void base64encode(const unsigned char in[3], unsigned char out[4], int count)
 {
 	out[0]=base64enc_tab[(in[0]>>2)];
 	out[1]=base64enc_tab[((in[0]&3)<<4)|(in[1]>>4)];
@@ -36,7 +30,7 @@ void base64encode(const unsigned char in[3], unsigned char out[4], int count)
 	out[3]=count<3 ? '=' : base64enc_tab[(in[2]&63)];
 }
 
-int base64decode(const char in[4], char out[3])
+static int base64decode(const char in[4], char out[3])
 {
 	uint8_t v[4];
 
@@ -52,7 +46,7 @@ int base64decode(const char in[4], char out[3])
 }
 
 /* decode a base64 string in one shot */
-int base64_decode(size_t in_len, const char *in, size_t out_len, unsigned char *out) {
+static int base64_decode(size_t in_len, const char *in, size_t out_len, unsigned char *out) {
 	int ii, io;
 	uint_least32_t v;
 	unsigned rem;
@@ -79,7 +73,7 @@ int base64_decode(size_t in_len, const char *in, size_t out_len, unsigned char *
 	return io;
 }
 
-int base64_encode(size_t in_len, const unsigned char *in, size_t out_len, char *out) {
+static int base64_encode(size_t in_len, const unsigned char *in, size_t out_len, char *out) {
 	int ii, io;
 	uint_least32_t v;
 	unsigned rem;

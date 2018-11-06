@@ -1,12 +1,17 @@
-#include "common.h"
-#if ENABLE_TRACE
-#include "trace.h"
-#endif
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <ctype.h>
+
+#if ENABLE_TRACE
+#include "trace.c"
+#endif
 
 void fatal(const char *msg, ...) {
 	va_list valist;
@@ -20,7 +25,7 @@ void fatal(const char *msg, ...) {
 	exit(2);
 }
 
-void* c_malloc(size_t size) {
+void *c_malloc(size_t size) {
 	void *ret = malloc(size);
 	if (!ret) {
 		fatal("Cannot malloc %li: %s", size, strerror(errno));
@@ -31,7 +36,7 @@ void* c_malloc(size_t size) {
 	return ret;
 }
 
-char* c_strdup(const char *s) {
+char *c_strdup(const char *s) {
 	char *ret = strdup(s);
 	if (!ret) {
 		fatal("Cannot strdup: %s", strerror(errno));
@@ -42,7 +47,7 @@ char* c_strdup(const char *s) {
 	return ret;
 }
 
-char* c_asprintf(const char *fmt, ...) {
+static char *c_asprintf(const char *fmt, ...) {
 	va_list valist;
 	va_start(valist, fmt);
 
@@ -67,7 +72,7 @@ void c_free(void *ptr) {
 	free(ptr);
 }
 
-FILE *c_fdopen(int fd, const char *mode) {
+static FILE *c_fdopen(int fd, const char *mode) {
 	FILE *ret = fdopen(fd, mode);
 	if (!ret) {
 		fatal("Cannot fdopen %i: %s", fd, strerror(errno));
@@ -78,7 +83,7 @@ FILE *c_fdopen(int fd, const char *mode) {
 	return ret;
 }
 
-int c_fclose(FILE *stream) {
+static int c_fclose(FILE *stream) {
 #if ENABLE_TRACE
 	trace_end("FIL", stream, "fclose");
 #endif
@@ -89,7 +94,7 @@ int c_fclose(FILE *stream) {
 	return ret;
 }
 
-int c_dup(int fd) {
+static int c_dup(int fd) {
 	int ret = dup(fd);
 	if (ret < 0) {
 		fatal("Cannot dup %i: %s", fd, strerror(errno));

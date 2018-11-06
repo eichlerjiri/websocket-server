@@ -1,18 +1,12 @@
-#include "server.h"
-#include "websocket.h"
-#include "sha1.h"
-#include "base64.h"
-#include "common.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <pthread.h>
+#include "common.c"
+#include "websocket-server.h"
+#include "sha1.c"
+#include "base64.c"
+#include "decode.c"
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-void send_error(FILE *out, const char *protocol, const char *code, const char *reason, const char *body) {
+static void send_error(FILE *out, const char *protocol, const char *code, const char *reason, const char *body) {
 	fprintf(out, "%s %s %s\r\n"
 		"Connection: Closed\r\n"
 		"\r\n"
@@ -20,23 +14,23 @@ void send_error(FILE *out, const char *protocol, const char *code, const char *r
 	fflush(out);
 }
 
-void send_400(FILE *out, const char *protocol) {
+static void send_400(FILE *out, const char *protocol) {
 	send_error(out, protocol, "400", "Bad Request", "");
 }
 
-void send_400_pre(FILE *out) {
+static void send_400_pre(FILE *out) {
 	send_400(out, "HTTP/1.1");
 }
 
-void send_405(FILE *out, const char *protocol) {
+static void send_405(FILE *out, const char *protocol) {
 	send_error(out, protocol, "405", "Method Not Allowed", "");
 }
 
-void send_404(FILE *out, const char *protocol) {
+static void send_404(FILE *out, const char *protocol) {
 	send_error(out, protocol, "404", "Not Found", "");
 }
 
-void send_switching(FILE *out, const char *protocol, const char *websocket_hash) {
+static void send_switching(FILE *out, const char *protocol, const char *websocket_hash) {
 	fprintf(out, "%s 101 Switching Protocols\r\n"
 		"Upgrade: WebSocket\r\n"
 		"Connection: Upgrade\r\n"
@@ -45,7 +39,7 @@ void send_switching(FILE *out, const char *protocol, const char *websocket_hash)
 	fflush(out);
 }
 
-void hash_websocket_key(char out[30], const char *key) {
+static void hash_websocket_key(char out[30], const char *key) {
 	char *input = c_asprintf("%s%s", key, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
 
 	char hash[20];
@@ -55,7 +49,7 @@ void hash_websocket_key(char out[30], const char *key) {
 	c_free(input);
 }
 
-int prepare_client(struct websocket_client *client) {
+static int prepare_client(struct websocket_client *client) {
 	char line[8192];
 	if (!fgets(line, sizeof(line), client->in)) {
 		send_400_pre(client->out);
@@ -127,7 +121,7 @@ int prepare_client(struct websocket_client *client) {
 	return 0;
 }
 
-void* start_client(void *ptr) {
+static void* start_client(void *ptr) {
 	struct websocket_client *client = ptr;
 
 	client->in = c_fdopen(client->cfd, "r");

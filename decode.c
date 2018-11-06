@@ -1,9 +1,3 @@
-#include "websocket.h"
-#include "server.h"
-#include <stdio.h>
-#include <string.h>
-#include <stdint.h>
-
 struct websocket_header {
 	unsigned char opcode : 4;
 	unsigned char reserved : 3;
@@ -12,18 +6,18 @@ struct websocket_header {
 	unsigned char mask : 1;
 };
 
-uint16_t reverse16(uint16_t x) {
+static uint16_t reverse16(uint16_t x) {
 	return ((x & 0x00FFu) << 8 | (x & 0xFF00u) >> 8) & 0xFFFFu;
 }
 
-uint64_t reverse64(uint64_t x) {
+static uint64_t reverse64(uint64_t x) {
 	x = (x & 0x00000000FFFFFFFF) << 32 | (x & 0xFFFFFFFF00000000) >> 32;
 	x = (x & 0x0000FFFF0000FFFF) << 16 | (x & 0xFFFF0000FFFF0000) >> 16;
 	x = (x & 0x00FF00FF00FF00FF) << 8 | (x & 0xFF00FF00FF00FF00) >> 8;
 	return x;
 }
 
-void send_packet(FILE *out, unsigned char opcode, const char *text, uint64_t length) {
+static void send_packet(FILE *out, unsigned char opcode, const char *text, uint64_t length) {
 	int extra_length = 0;
 
 	struct websocket_header h;
@@ -59,11 +53,11 @@ void websocket_send(FILE *out, const char *text) {
 	send_packet(out, 0x1, text, strlen(text));
 }
 
-void send_close(FILE *out, const char *text) {
+static void send_close(FILE *out, const char *text) {
 	send_packet(out, 0x8, text, strlen(text));
 }
 
-void read_websocket_stream(struct websocket_client *client) {
+static void read_websocket_stream(struct websocket_client *client) {
 	char data[8192];
 	uint64_t length = 0;
 	unsigned char opcode = 0;

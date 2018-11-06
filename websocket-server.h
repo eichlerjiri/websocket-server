@@ -1,8 +1,8 @@
-#ifndef SERVER_H
-#define SERVER_H
-
-#include <stdio.h>
-#include <stdint.h>
+void fatal(const char *msg, ...);
+void *c_malloc(size_t size);
+char *c_strdup(const char *s);
+void c_free(void *ptr);
+void c_pthread_create(void *(*start_routine)(void *), void *arg);
 
 struct websocket_client;
 
@@ -23,6 +23,5 @@ struct websocket_client {
 };
 
 void websocket_listen(uint16_t port, struct websocket_context *ctx);
+void websocket_send(FILE *out, const char *text);
 void websocket_close(struct websocket_client *client);
-
-#endif
